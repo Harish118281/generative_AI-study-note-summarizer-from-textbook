@@ -1,0 +1,21 @@
+.app-root {
+  height: 100svh;
+  min-height: 0;
+  overflow: hidden;
+  color: var(--color-text);
+  background: var(--color-page);
+}
+
+.app-root-public {
+  height: auto;
+  min-height: 100svh;
+  overflow: visible;
+}
+
+.app-loading {
+  display: grid;
+  min-height: 100svh;
+  place-items: center;
+  color: #66706b;
+  font-size: 15px;
+}

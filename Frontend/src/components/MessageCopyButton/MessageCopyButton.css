@@ -1,0 +1,39 @@
+.message-copy-button {
+  display: inline-grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--color-muted);
+  background: transparent;
+  cursor: pointer;
+  opacity: 0.72;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease,
+    opacity 140ms ease;
+}
+
+.message-copy-button svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+.message-copy-button:hover {
+  border-color: var(--color-line);
+  color: var(--color-heading);
+  background: var(--color-surface-soft);
+  opacity: 1;
+}
+
+.message-copy-button:disabled {
+  cursor: default;
+  opacity: 0.4;
+}

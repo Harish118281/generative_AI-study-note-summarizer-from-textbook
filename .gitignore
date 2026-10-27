@@ -1,0 +1,20 @@
+# Local environment files and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# Editor and operating-system files
+.DS_Store
+Thumbs.db
+Desktop.ini
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp

@@ -1,0 +1,134 @@
+.svg-diagram {
+  max-width: 100%;
+  margin: 18px 0;
+  overflow: hidden;
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  background: var(--color-surface);
+}
+
+.svg-diagram-header {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 6px 14px;
+  border-bottom: 1px solid #ecefed;
+  background: #ffffff;
+}
+
+.svg-diagram-title {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  color: #111a16;
+  font-size: 14px;
+  font-weight: 760;
+  letter-spacing: 0;
+}
+
+.svg-diagram-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.svg-diagram-action {
+  display: inline-grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  color: #141d18;
+  background: transparent;
+  cursor: pointer;
+  transition:
+    background 140ms ease,
+    color 140ms ease,
+    transform 140ms ease;
+}
+
+.svg-diagram-action:hover,
+.svg-diagram-action.active {
+  color: #101713;
+  background: #e9ecea;
+}
+
+.svg-diagram-action:active {
+  transform: scale(0.96);
+}
+
+.svg-diagram-stage {
+  display: grid;
+  min-height: 180px;
+  max-height: min(46vh, 360px);
+  place-items: center;
+  padding: clamp(18px, 4vw, 32px);
+  background: #f4f4f4;
+}
+
+.svg-diagram-stage-preview {
+  overflow: hidden;
+}
+
+.svg-diagram-stage-source {
+  overflow: auto;
+}
+
+.svg-diagram .svg-diagram-image {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  max-height: 280px;
+  height: auto;
+  object-fit: contain;
+  margin: 0;
+  border-radius: 0;
+}
+
+.svg-diagram-source {
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  overflow-x: auto;
+  border-radius: 8px;
+  padding: 16px 18px;
+  color: #dbe7e0;
+  background: #101713;
+  font-family:
+    "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  text-align: left;
+  white-space: pre;
+}
+
+.svg-diagram-source code {
+  font-family: inherit;
+}
+
+@media (max-width: 640px) {
+  .svg-diagram-header {
+    min-height: 42px;
+    padding-inline: 12px;
+  }
+
+  .svg-diagram-stage {
+    min-height: 150px;
+    max-height: min(42vh, 280px);
+    padding: 16px 12px;
+  }
+
+  .svg-diagram .svg-diagram-image {
+    max-height: 220px;
+  }
+
+  .svg-diagram-action {
+    width: 30px;
+    height: 30px;
+  }
+}

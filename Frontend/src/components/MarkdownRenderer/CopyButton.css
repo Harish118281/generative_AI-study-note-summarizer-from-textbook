@@ -1,0 +1,24 @@
+.copy-button {
+  display: inline-flex;
+  min-width: 62px;
+  min-height: 30px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 6px;
+  color: #d7e2dc;
+  background: rgb(255 255 255 / 8%);
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease;
+}
+
+.copy-button:hover {
+  border-color: rgb(255 255 255 / 26%);
+  color: #ffffff;
+  background: rgb(255 255 255 / 14%);
+}

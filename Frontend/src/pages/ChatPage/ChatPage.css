@@ -1,0 +1,121 @@
+.chat-page {
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--sidebar-width, 320px) minmax(0, 1fr);
+  height: 100svh;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--color-page);
+}
+
+.chat-page.sidebar-collapsed {
+  grid-template-columns: var(--sidebar-width, 68px) minmax(0, 1fr);
+}
+
+.sidebar-resize-handle {
+  position: absolute;
+  z-index: 20;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--sidebar-width, 320px) - 3px);
+  width: 6px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.sidebar-resize-handle:hover,
+.sidebar-resize-handle:focus-visible,
+.file-pane-resize-handle:hover,
+.file-pane-resize-handle:focus-visible {
+  background: color-mix(in srgb, var(--color-accent) 32%, transparent);
+  outline: none;
+}
+
+.chat-workspace {
+  display: flex;
+  height: 100svh;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  flex-direction: column;
+  background: var(--color-surface);
+}
+
+.chat-conversation-layout {
+  position: relative;
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+}
+
+.chat-content-column {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.file-pane-resize-handle {
+  z-index: 13;
+  width: 6px;
+  flex: 0 0 6px;
+  margin-right: -3px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.empty-chat-workspace {
+  padding: 0;
+}
+
+.empty-chat-workspace .chat-content-column {
+  align-items: center;
+  justify-content: center;
+}
+
+.empty-chat-workspace .message-list {
+  flex: 0 0 auto;
+  width: min(760px, 100%);
+  overflow: visible;
+  padding: 0;
+}
+
+.empty-chat-workspace .messages-inner {
+  display: none;
+}
+
+.empty-chat-workspace .composer {
+  width: min(760px, 100%);
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+@media (max-width: 860px) {
+  .chat-page {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .chat-page.sidebar-collapsed {
+    grid-template-columns: 1fr;
+  }
+
+  .chat-workspace {
+    height: auto;
+    min-height: 0;
+  }
+
+  .empty-chat-workspace {
+    min-height: 100svh;
+    padding: 0;
+  }
+
+  .sidebar-resize-handle,
+  .file-pane-resize-handle { display: none; }
+}
