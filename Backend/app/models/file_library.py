@@ -10,6 +10,7 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from pgvector.sqlalchemy import Vector
 
 from app.core.database import Base
 
@@ -148,6 +149,11 @@ class FileChunk(Base):
     content: Mapped[str] = mapped_column(
         Text,
         nullable=False,
+    )
+
+    embedding: Mapped[list[float] | None] = mapped_column(
+        Vector(768),
+        nullable=True,
     )
 
     created_at: Mapped[datetime] = mapped_column(

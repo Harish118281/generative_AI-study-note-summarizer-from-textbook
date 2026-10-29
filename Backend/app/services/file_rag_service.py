@@ -14,10 +14,17 @@ from sqlalchemy.orm import Session
 from app.models.chat import Chat
 from app.models.file_library import ChatFile, FileChunk, FileLibrary
 from app.core.config import settings
-from app.services.vector_store import (
-    build_file_vector_index,
-    delete_file_vector_index,
+from app.services.object_storage import (
+    build_file_object_key,
+    delete_file_object,
+    get_file_object,
+    is_object_storage_reference,
+    object_key_from_reference,
+    object_storage_is_configured,
+    object_storage_reference,
+    put_file_object,
 )
+from app.services.embedding_service import embed_texts
 
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
@@ -146,10 +153,11 @@ STOP_WORDS = {
 
 
 def ensure_upload_folders() -> None:
+    if object_storage_is_configured():
+        return
+
     for folder in CATEGORY_FOLDERS.values():
         (UPLOAD_ROOT / folder).mkdir(parents=True, exist_ok=True)
-
-    (UPLOAD_ROOT / "faiss").mkdir(parents=True, exist_ok=True)
 
 
 def save_upload_to_library(
@@ -183,12 +191,25 @@ def save_upload_to_library(
         mime_type=mime_type,
     )
     stored_filename = f"{file_hash}{extension}"
-    storage_path = str(
-        Path("storage") / "uploads" / CATEGORY_FOLDERS[category] / stored_filename
-    )
-    absolute_path = BACKEND_DIR / storage_path
-    absolute_path.parent.mkdir(parents=True, exist_ok=True)
-    absolute_path.write_bytes(file_bytes)
+    if object_storage_is_configured():
+        object_key = build_file_object_key(
+            file_hash=file_hash,
+            category=CATEGORY_FOLDERS[category],
+            extension=extension,
+        )
+        put_file_object(
+            key=object_key,
+            content=file_bytes,
+            content_type=mime_type,
+        )
+        storage_path = object_storage_reference(object_key)
+    else:
+        storage_path = str(
+            Path("storage") / "uploads" / CATEGORY_FOLDERS[category] / stored_filename
+        )
+        absolute_path = BACKEND_DIR / storage_path
+        absolute_path.parent.mkdir(parents=True, exist_ok=True)
+        absolute_path.write_bytes(file_bytes)
 
     text = extract_text(
         file_bytes=file_bytes,
@@ -196,6 +217,7 @@ def save_upload_to_library(
         category=category,
     )
     chunks = chunk_text(text) if text else []
+    chunk_embeddings = _embed_document_chunks(chunks)
     scoped_hash = _scoped_file_hash(
         user_id=user_id,
         file_hash=file_hash,
@@ -228,16 +250,15 @@ def save_upload_to_library(
                 file_id=library_file.id,
                 chunk_index=index,
                 content=chunk,
+                embedding=(
+                    chunk_embeddings[index]
+                    if chunk_embeddings is not None
+                    else None
+                ),
             )
         )
 
     db.commit()
-
-    if chunks:
-        build_file_vector_index(
-            file_hash=file_hash,
-            chunks=chunks,
-        )
 
     return library_file, True
 
@@ -463,6 +484,7 @@ def delete_library_file(
     if library_file is None:
         return False
 
+    storage_path = library_file.storage_path or library_file.stored_filename
     file_path = get_file_path(library_file)
     file_hash = _file_hash(library_file)
     other_references = (
@@ -477,14 +499,14 @@ def delete_library_file(
         .count()
     )
 
-    if other_references == 0 and file_path and file_path.exists():
-        file_path.unlink()
-
-    if other_references == 0:
-        delete_file_vector_index(file_hash)
-
     db.delete(library_file)
     db.commit()
+
+    if other_references == 0:
+        if is_object_storage_reference(storage_path):
+            delete_file_object(object_key_from_reference(storage_path))
+        elif file_path and file_path.exists():
+            file_path.unlink()
 
     return True
 
@@ -570,17 +592,16 @@ def get_chat_file_media_parts(
         if category not in {"images", "audio"}:
             continue
 
-        file_path = get_file_path(file)
-
-        if file_path is None or not file_path.exists():
-            continue
-
         size = _file_size(file)
 
         if size > MAX_INLINE_MEDIA_BYTES:
             continue
 
-        encoded_data = base64.b64encode(file_path.read_bytes()).decode("ascii")
+        file_bytes = get_file_content(file)
+        if file_bytes is None:
+            continue
+
+        encoded_data = base64.b64encode(file_bytes).decode("ascii")
         mime_type = _file_mime_type(file)
 
         prompt_items.append(
@@ -638,6 +659,9 @@ def get_file_path(
     if not storage_path:
         return None
 
+    if is_object_storage_reference(storage_path):
+        return None
+
     path = Path(storage_path)
 
     if path.is_absolute():
@@ -652,6 +676,21 @@ def get_file_path(
         return resolved_path
 
     return _find_existing_file_path(file) or resolved_path
+
+
+def get_file_content(file: FileLibrary) -> bytes | None:
+    if file.file_data is not None:
+        return bytes(file.file_data)
+
+    storage_path = file.storage_path or file.stored_filename
+    if is_object_storage_reference(storage_path):
+        return get_file_object(object_key_from_reference(storage_path))
+
+    path = get_file_path(file)
+    if path is not None and path.is_file():
+        return path.read_bytes()
+
+    return None
 
 
 def _find_existing_file_path(
@@ -798,6 +837,38 @@ def _retrieve_relevant_chunks(
     if not attached_file_ids:
         return []
 
+    if (
+        db.bind is not None
+        and db.bind.dialect.name == "postgresql"
+        and question.strip()
+    ):
+        try:
+            query_embedding = embed_texts(
+                [question],
+                task_type="RETRIEVAL_QUERY",
+            )[0]
+            semantic_chunks = (
+                db.query(FileChunk, FileLibrary.filename)
+                .join(FileLibrary, FileChunk.file_id == FileLibrary.id)
+                .filter(FileChunk.file_id.in_(attached_file_ids))
+                .filter(FileChunk.embedding.isnot(None))
+                .order_by(FileChunk.embedding.cosine_distance(query_embedding))
+                .limit(MAX_CONTEXT_CHUNKS)
+                .all()
+            )
+            if semantic_chunks:
+                return [
+                    (
+                        f"Source file: {filename}\n"
+                        f"Chunk: {chunk.chunk_index + 1}\n\n"
+                        f"{chunk.content}"
+                    )
+                    for chunk, filename in semantic_chunks
+                ]
+        except Exception as error:
+            db.rollback()
+            print(f"[RAG] Vector search unavailable; using keyword ranking: {error}", flush=True)
+
     chunks = (
         db.query(FileChunk, FileLibrary.filename)
         .join(FileLibrary, FileChunk.file_id == FileLibrary.id)
@@ -846,6 +917,17 @@ def _retrieve_relevant_chunks(
         )
         for item in selected_chunks
     ]
+
+
+def _embed_document_chunks(chunks: list[str]) -> list[list[float]] | None:
+    if not chunks:
+        return []
+
+    try:
+        return embed_texts(chunks, task_type="RETRIEVAL_DOCUMENT")
+    except Exception as error:
+        print(f"[RAG] Document embedding failed; storing text chunks only: {error}", flush=True)
+        return None
 
 
 def _build_metadata_context(

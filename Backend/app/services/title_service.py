@@ -1,14 +1,23 @@
 import re
 
+from openai import OpenAI
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.models.chat import Chat
 from app.models.message import Message
-from app.services.local_title_service import generate_chat_title
 
 
 MAX_TEMP_TITLE_LENGTH = 44
 MAX_FINAL_TITLE_LENGTH = 60
+TITLE_SYSTEM_PROMPT = (
+    "Create a concise, specific title for this chat based on the user's first "
+    "message and the assistant's first response. Give the user's message the "
+    "most weight; use the answer only to clarify its topic. For greetings or "
+    "messages without a clear topic, make a brief title reflecting that actual "
+    "intent without inventing a subject. Return only a title of at most 7 words "
+    "and 60 characters. No quotes, punctuation, or explanation."
+)
 
 
 def set_temporary_title_from_user_message(
@@ -111,13 +120,42 @@ def generate_chat_title_from_response(
     if not conversation.strip():
         return None
 
-    raw_title = generate_chat_title(conversation)
+    if not settings.CLOUDFLARE_API_KEY or not settings.CLOUDFLARE_ACCOUNT_ID:
+        print(
+            "[Title] Cloudflare credentials are not configured; keeping temporary title",
+            flush=True,
+        )
+        return None
+
+    try:
+        client = OpenAI(
+            base_url=(
+                "https://api.cloudflare.com/client/v4/accounts/"
+                f"{settings.CLOUDFLARE_ACCOUNT_ID}/ai/v1"
+            ),
+            api_key=settings.CLOUDFLARE_API_KEY,
+            timeout=20.0,
+            max_retries=0,
+        )
+        response = client.chat.completions.create(
+            model=settings.CLOUDFLARE_TITLE_MODEL,
+            messages=[
+                {"role": "system", "content": TITLE_SYSTEM_PROMPT},
+                {"role": "user", "content": conversation},
+            ],
+            temperature=0.2,
+            max_tokens=32,
+        )
+        raw_title = response.choices[0].message.content or ""
+    except Exception as error:
+        print(f"[Title] Cloudflare Workers AI title generation failed: {error}", flush=True)
+        return None
 
     cleaned_title = clean_final_title(raw_title)
 
     if not cleaned_title:
         print(
-            f"[Title] rejected local Gemma title: {raw_title!r}",
+            f"[Title] rejected Cloudflare title: {raw_title!r}",
             flush=True,
         )
 

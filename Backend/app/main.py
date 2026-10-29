@@ -1,5 +1,3 @@
-from threading import Thread
-
 from fastapi import FastAPI
 
 from app.routers.chat import router as chat_router
@@ -9,9 +7,9 @@ from app.routers.auth import router as auth_router
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.database import Base, engine
+from app.core.config import settings
 from app.services.database_maintenance import ensure_database_shape
 from app.services.file_rag_service import ensure_upload_folders
-from app.services.local_title_service import preload_title_model
 import app.models
 
 Base.metadata.create_all(bind=engine)
@@ -30,21 +28,14 @@ app.include_router(auth_router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
+        origin.strip().rstrip("/")
+        for origin in settings.FRONTEND_ORIGINS.split(",")
+        if origin.strip()
     ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-@app.on_event("startup")
-def start_title_model_preload():
-    Thread(
-        target=preload_title_model,
-        daemon=True,
-    ).start()
 
 
 @app.get("/")

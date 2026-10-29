@@ -17,6 +17,18 @@ def ensure_database_shape() -> None:
         if inspector.has_table("chats"):
             _add_missing_columns(connection, "chats", {"user_id": "INTEGER"})
 
+        if engine.dialect.name == "postgresql" and inspector.has_table("file_chunks"):
+            connection.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+            connection.execute(
+                text("ALTER TABLE file_chunks ADD COLUMN IF NOT EXISTS embedding vector(768)")
+            )
+            connection.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_file_chunks_embedding_hnsw "
+                    "ON file_chunks USING hnsw (embedding vector_cosine_ops)"
+                )
+            )
+
 
 def _add_missing_columns(connection, table_name: str, expected_columns: dict[str, str]) -> None:
     columns = {column["name"] for column in inspect(engine).get_columns(table_name)}

@@ -20,6 +20,7 @@ from app.schemas.chat import (
 from app.services.file_rag_service import (
     attach_upload_to_chat,
     detach_file_from_chat,
+    get_file_content,
     get_file_path,
     get_library_file,
     list_library_files,
@@ -259,14 +260,15 @@ def get_library_file_content(
             },
         )
 
-    if file.file_data is None:
+    content = get_file_content(file)
+    if content is None:
         raise HTTPException(
             status_code=404,
             detail="File content is not stored",
         )
 
     return Response(
-        content=file.file_data,
+        content=content,
         media_type=media_type,
         headers={
             "Content-Disposition": f'inline; filename="{file.filename}"',

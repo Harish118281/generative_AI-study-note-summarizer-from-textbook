@@ -13,6 +13,7 @@ from app.schemas.chat import (
 from app.services.file_rag_service import (
     delete_library_file,
     format_file,
+    get_file_content,
     get_file_path,
     get_library_file,
     list_library_files,
@@ -119,9 +120,10 @@ def download_file(
             filename=file.filename,
         )
 
-    if file.file_data is not None:
+    content = get_file_content(file)
+    if content is not None:
         return Response(
-            content=file.file_data,
+            content=content,
             media_type=file.mime_type or file.content_type or "application/octet-stream",
             headers={
                 "Content-Disposition": f'attachment; filename="{file.filename}"',
@@ -161,9 +163,10 @@ def preview_file(
             },
         )
 
-    if file.file_data is not None:
+    content = get_file_content(file)
+    if content is not None:
         return Response(
-            content=file.file_data,
+            content=content,
             media_type=file.mime_type or file.content_type or "application/octet-stream",
             headers={
                 "Content-Disposition": f'inline; filename="{file.filename}"',
