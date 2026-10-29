@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
+from urllib.parse import urlparse
 
 from app.core.config import settings
 from app.core.database import get_db
@@ -12,13 +13,26 @@ from app.services.auth_service import create_user, find_user_by_email, verify_pa
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
+def _session_cookie_policy() -> tuple[bool, str]:
+    for origin in settings.FRONTEND_ORIGINS.split(","):
+        parsed_origin = urlparse(origin.strip())
+        if (
+            parsed_origin.scheme == "https"
+            and parsed_origin.hostname not in {"localhost", "127.0.0.1", "::1"}
+        ):
+            return True, "none"
+
+    return False, "lax"
+
+
 def _set_session_cookie(response: Response, user: User) -> None:
+    secure_cookie, same_site = _session_cookie_policy()
     response.set_cookie(
         key=SESSION_COOKIE,
         value=create_access_token(user),
         httponly=True,
-        samesite="lax",
-        secure=False,
+        samesite=same_site,
+        secure=secure_cookie,
         max_age=settings.JWT_EXPIRE_DAYS * 24 * 60 * 60,
         path="/",
     )
@@ -46,7 +60,13 @@ def login(payload: LoginRequest, response: Response, db: Session = Depends(get_d
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 def logout(response: Response):
-    response.delete_cookie(key=SESSION_COOKIE, path="/")
+    secure_cookie, same_site = _session_cookie_policy()
+    response.delete_cookie(
+        key=SESSION_COOKIE,
+        path="/",
+        secure=secure_cookie,
+        samesite=same_site,
+    )
 
 
 @router.get("/me", response_model=CurrentUserResponse)
