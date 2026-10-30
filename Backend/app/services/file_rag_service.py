@@ -179,6 +179,15 @@ def save_upload_to_library(
     existing_file = _get_file_by_hash(db, user_id, file_hash)
 
     if existing_file is not None:
+        if (
+            Path(original_filename).suffix.lower() == ".pdf"
+            and db.query(FileChunk).filter(FileChunk.file_id == existing_file.id).first() is None
+        ):
+            _index_file_text(
+                db=db,
+                file=existing_file,
+                text=extract_text(file_bytes, original_filename, "documents"),
+            )
         return existing_file, False
 
     extension = Path(original_filename).suffix.lower()
@@ -261,6 +270,24 @@ def save_upload_to_library(
     db.commit()
 
     return library_file, True
+
+
+def _index_file_text(db: Session, file: FileLibrary, text: str | None) -> None:
+    chunks = chunk_text(text) if text else []
+    if not chunks:
+        return
+
+    embeddings = _embed_document_chunks(chunks)
+    for index, chunk in enumerate(chunks):
+        db.add(
+            FileChunk(
+                file_id=file.id,
+                chunk_index=index,
+                content=chunk,
+                embedding=embeddings[index] if embeddings is not None else None,
+            )
+        )
+    db.commit()
 
 
 def upload_file_to_library(
@@ -957,12 +984,49 @@ def _extract_pdf_text(
     from io import BytesIO
 
     reader = PdfReader(BytesIO(file_bytes))
-    pages = [
-        page.extract_text() or ""
-        for page in reader.pages
-    ]
+    pages = [page.extract_text() or "" for page in reader.pages]
+    if not any(len(text.strip()) >= 40 for text in pages):
+        return _ocr_pdf_pages(file_bytes, pages)
+
+    sparse_pages = [index for index, text in enumerate(pages) if len(text.strip()) < 40]
+    if sparse_pages:
+        ocr_pages = _ocr_pdf_pages(file_bytes, pages, page_indexes=sparse_pages)
+        if ocr_pages:
+            return ocr_pages
 
     return "\n\n".join(pages)
+
+
+def _ocr_pdf_pages(
+    file_bytes: bytes,
+    extracted_pages: list[str],
+    page_indexes: list[int] | None = None,
+) -> str | None:
+    try:
+        import fitz
+        import pytesseract
+        from PIL import Image
+        from io import BytesIO
+    except ImportError:
+        print("[OCR] OCR dependencies unavailable; scanned PDF text was not extracted.", flush=True)
+        return None
+
+    try:
+        document = fitz.open(stream=file_bytes, filetype="pdf")
+        indexes = page_indexes if page_indexes is not None else list(range(len(document)))
+        pages = list(extracted_pages)
+        for index in indexes:
+            page = document.load_page(index)
+            pixmap = page.get_pixmap(matrix=fitz.Matrix(2, 2), colorspace=fitz.csGRAY, alpha=False)
+            image = Image.open(BytesIO(pixmap.tobytes("png")))
+            recognized = pytesseract.image_to_string(image)
+            if recognized.strip():
+                pages[index] = recognized
+        document.close()
+        return "\n\n".join(pages)
+    except Exception as error:
+        print(f"[OCR] PDF OCR failed: {error}", flush=True)
+        return "\n\n".join(extracted_pages) or None
 
 
 def _extract_docx_text(
