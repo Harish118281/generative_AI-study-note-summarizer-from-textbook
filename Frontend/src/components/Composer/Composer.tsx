@@ -1,12 +1,16 @@
 import { useLayoutEffect, useRef } from 'react'
 import type { ChangeEvent, FormEvent, KeyboardEvent, RefObject } from 'react'
-import type { ChatModel, ChatModelOption, PendingAttachment } from '../../types/chat'
+import type { ChatMessageAttachment, ChatModel, ChatModelOption, PendingAttachment } from '../../types/chat'
 import './Composer.css'
 
 type ComposerProps = {
   value: string
   error: string
   attachments: PendingAttachment[]
+  existingAttachments?: ChatMessageAttachment[]
+  isEditing?: boolean
+  onRemoveExistingAttachment?: (fileId: string) => void
+  onCancelEdit?: () => void
   disabled: boolean
   canSend: boolean
   isSending: boolean
@@ -27,6 +31,10 @@ function Composer({
   value,
   error,
   attachments,
+  existingAttachments = [],
+  isEditing = false,
+  onRemoveExistingAttachment,
+  onCancelEdit,
   disabled,
   canSend,
   isSending,
@@ -113,8 +121,24 @@ function Composer({
       )}
 
       <div className="composer-box">
-        {attachments.length > 0 && (
+        {(attachments.length > 0 || existingAttachments.length > 0 || isEditing) && (
           <div className="attachment-list" aria-label="Attached files">
+            {existingAttachments.map((file) => (
+              <span className="attachment-chip" key={`kept-${file.id}`}>
+                <FileIcon category={file.category} />
+                <span className="attachment-name">{file.filename}</span>
+                <span className="attachment-size">{formatFileSize(file.size)}</span>
+                <button
+                  aria-label={`Remove ${file.filename}`}
+                  className="attachment-remove"
+                  disabled={disabled}
+                  onClick={() => onRemoveExistingAttachment?.(file.id)}
+                  type="button"
+                >
+                  x
+                </button>
+              </span>
+            ))}
             {attachments.map((file) => (
               <span className="attachment-chip" key={file.id}>
                 <FileIcon category={file.category} />
@@ -167,6 +191,11 @@ function Composer({
           </div>
 
           <div className="composer-submit-controls">
+            {isEditing && (
+              <button className="edit-cancel-button" onClick={onCancelEdit} type="button">
+                Cancel edit
+              </button>
+            )}
             <select
               aria-label="Select model"
               className="model-select"

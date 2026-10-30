@@ -15,6 +15,7 @@ type MessageListProps = {
   scrollContainerRef: RefObject<HTMLDivElement | null>
   onScroll: () => void
   onShare: (message: ChatMessage) => void
+  onEdit: (message: ChatMessage) => void
   onOpenPdf: (attachment: ChatMessageAttachment) => void
 }
 
@@ -23,6 +24,7 @@ type MessageItemProps = {
   isStreaming: boolean
   assistantStatusText?: string
   onShare: (message: ChatMessage) => void
+  onEdit: (message: ChatMessage) => void
   onOpenPdf: (attachment: ChatMessageAttachment) => void
 }
 
@@ -31,6 +33,7 @@ const MessageItem = memo(function MessageItem({
   isStreaming,
   assistantStatusText,
   onShare,
+  onEdit,
   onOpenPdf,
 }: MessageItemProps) {
   const copyValue = getMessageCopyValue(message)
@@ -104,7 +107,11 @@ const MessageItem = memo(function MessageItem({
                 >
                   <ShareIcon />
                 </MessageActionButton>
-                <MessageActionButton label="Edit message" disabled>
+                <MessageActionButton
+                  label="Edit message"
+                  disabled={!Number.isInteger(message.serverId)}
+                  onClick={() => onEdit(message)}
+                >
                   <EditIcon />
                 </MessageActionButton>
               </>
@@ -125,6 +132,7 @@ function MessageList({
   scrollContainerRef,
   onScroll,
   onShare,
+  onEdit,
   onOpenPdf,
 }: MessageListProps) {
   const lastMessage = messages[messages.length - 1]
@@ -158,6 +166,7 @@ function MessageList({
             }
             message={message}
             onShare={onShare}
+            onEdit={onEdit}
             onOpenPdf={onOpenPdf}
           />
         ))}

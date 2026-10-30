@@ -1,5 +1,6 @@
 export type ChatMessage = {
   id: number
+  serverId?: number
   role: 'assistant' | 'user'
   content: string
   attachments?: ChatMessageAttachment[]
@@ -100,6 +101,7 @@ export type FileCategory =
   | 'others'
 
 export type SavedChatMessage = {
+  id?: number
   role: string
   content: string
   created_at?: string

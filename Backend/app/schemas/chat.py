@@ -64,6 +64,7 @@ class AttachedFileListResponse(BaseModel):
 
 
 class MessageItem(BaseModel):
+    id: int
     role: str
     content: str
     created_at: datetime

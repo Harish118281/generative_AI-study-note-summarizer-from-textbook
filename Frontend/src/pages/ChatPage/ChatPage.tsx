@@ -120,6 +120,8 @@ function ChatPage({ user, isLoggingOut, onLogout }: ChatPageProps) {
   const [historyError, setHistoryError] = useState('')
   const [isNearConversationBottom, setIsNearConversationBottom] = useState(true)
   const [shareMessage, setShareMessage] = useState<ChatMessage | null>(null)
+  const [editingMessage, setEditingMessage] = useState<{ chatId: number; message: ChatMessage } | null>(null)
+  const [retainedAttachments, setRetainedAttachments] = useState<ChatMessageAttachment[]>([])
   const [webSearchStatuses, setWebSearchStatuses] = useState<Record<string, string>>({})
   const messageId = useRef(1)
   const chatLoadId = useRef(0)
@@ -143,7 +145,7 @@ function ChatPage({ user, isLoggingOut, onLogout }: ChatPageProps) {
   const webSearchStatus = webSearchStatuses[getDraftKey()] ?? ''
 
   const canSend =
-    (input.trim().length > 0 || pendingFiles.length > 0) &&
+    (input.trim().length > 0 || pendingFiles.length > 0 || retainedAttachments.length > 0) &&
     !isActiveChatSending() &&
     !isLoadingMessages
   const isEmptyChat =
@@ -336,6 +338,24 @@ function ChatPage({ user, isLoggingOut, onLogout }: ChatPageProps) {
     }
   }
 
+  function beginMessageEdit(message: ChatMessage) {
+    const chatId = activeChatRef.current?.id
+    if (!chatId || message.role !== 'user' || isActiveChatSending()) return
+    setEditingMessage({ chatId, message })
+    setRetainedAttachments(message.attachments ?? [])
+    setPendingFiles([])
+    setInput(message.content)
+    focusComposer()
+  }
+
+  function cancelMessageEdit() {
+    setEditingMessage(null)
+    setRetainedAttachments([])
+    setInput('')
+    setPendingFiles([])
+    saveDraft(getDraftKey(), EMPTY_DRAFT)
+  }
+
   async function refreshChatFiles(chatId: number, target?: ChatMessageAttachment) {
     setIsLoadingChatFiles(true)
     setPdfFilesError('')
@@ -416,6 +436,7 @@ function ChatPage({ user, isLoggingOut, onLogout }: ChatPageProps) {
   function mapSavedMessages(savedMessages: SavedChatMessage[], files: ChatAttachment[] = []) {
     const restoredMessages: ChatMessage[] = savedMessages.map((message) => ({
       id: createMessageId(),
+      serverId: message.id,
       role: normalizeRole(message.role),
       content: message.content,
     }))
@@ -577,9 +598,10 @@ function ChatPage({ user, isLoggingOut, onLogout }: ChatPageProps) {
     const content = input.trim()
     const chatAtSubmit = activeChatRef.current
     const submittingKey = getDraftKey(chatAtSubmit)
+    const isEditingCurrentChat = editingMessage?.chatId === chatAtSubmit?.id
 
     if (
-      (content.length === 0 && pendingFiles.length === 0) ||
+      (content.length === 0 && pendingFiles.length === 0 && !(isEditingCurrentChat && retainedAttachments.length > 0)) ||
       sendingChatKeysRef.current.has(submittingKey)
     ) {
       return
@@ -602,16 +624,32 @@ function ChatPage({ user, isLoggingOut, onLogout }: ChatPageProps) {
       category: attachment.category,
       preview_url: attachment.preview_url,
     }))
+    const currentEdit = editingMessage?.chatId === chatAtSubmit?.id ? editingMessage : null
+    const messageAttachments = currentEdit
+      ? [...retainedAttachments, ...attachmentsForMessage]
+      : attachmentsForMessage
     const backendMessage =
-      content || buildAttachmentOnlyPrompt(attachmentsForMessage)
+      content || buildAttachmentOnlyPrompt(messageAttachments)
     const userMessage: ChatMessage = {
-      id: createMessageId(),
+      id: currentEdit?.message.id ?? createMessageId(),
+      serverId: currentEdit?.message.serverId,
       role: 'user',
       content,
-      attachments: attachmentsForMessage,
+      attachments: messageAttachments,
     }
 
-    const messagesWithUser = [...previousMessages, userMessage]
+    const editIndex = currentEdit
+      ? previousMessages.findIndex((message) => message.id === currentEdit.message.id)
+      : -1
+    if (currentEdit && editIndex < 0) {
+      setChatSending(submittingKey, false)
+      streamAbortControllersRef.current.delete(submittingKey)
+      setError('This message is no longer available to edit. Reload the chat and try again.')
+      return
+    }
+    const messagesWithUser = currentEdit
+      ? [...previousMessages.slice(0, editIndex), userMessage]
+      : [...previousMessages, userMessage]
     if (chatAtSubmit) {
       storeChatMessages(chatAtSubmit.id, messagesWithUser)
     } else if (navigationIdAtSubmit === chatLoadId.current && activeChatRef.current === null) {
@@ -620,6 +658,8 @@ function ChatPage({ user, isLoggingOut, onLogout }: ChatPageProps) {
     setIsNearConversationBottom(true)
     setInput('')
     setPendingFiles([])
+    setEditingMessage(null)
+    setRetainedAttachments([])
     saveDraft(submittingKey, EMPTY_DRAFT)
     setError('')
     setChatWebSearchStatus(submittingKey, '')
@@ -687,6 +727,10 @@ function ChatPage({ user, isLoggingOut, onLogout }: ChatPageProps) {
 
       const response = await streamMessage(resolvedSession.id, backendMessage, selectedModel, {
         files: filesForMessage,
+        editMessageId: currentEdit?.message.serverId,
+        keepFileIds: currentEdit
+          ? retainedAttachments.map((attachment) => Number(attachment.id)).filter(Number.isInteger)
+          : undefined,
         webSearchEnabled,
         signal: abortController.signal,
         onChunk: (_chunk, fullAnswer) => {
@@ -703,6 +747,16 @@ function ChatPage({ user, isLoggingOut, onLogout }: ChatPageProps) {
         },
         onTitle: (title) => {
           updateSessionTitle(resolvedSession.id, title)
+        },
+        onUserMessageId: (id) => {
+          if (currentEdit) return
+          const currentMessages = sessionMessagesRef.current[resolvedSession.id] ?? pendingMessages
+          storeChatMessages(
+            resolvedSession.id,
+            currentMessages.map((currentMessage) =>
+              currentMessage.id === userMessage.id ? { ...currentMessage, serverId: id } : currentMessage,
+            ),
+          )
         },
         onWebSearch: (status, message) => {
           setChatWebSearchStatus(
@@ -1098,11 +1152,16 @@ function ChatPage({ user, isLoggingOut, onLogout }: ChatPageProps) {
                 messages={messages}
                 onScroll={handleMessageListScroll}
                 onShare={openShareDialog}
+                onEdit={beginMessageEdit}
                 onOpenPdf={openMessageAttachment}
                 scrollContainerRef={messageListRef}
               />
               <Composer
                 attachments={pendingFiles}
+                existingAttachments={
+                  editingMessage?.chatId === activeChat?.id ? retainedAttachments : []
+                }
+                isEditing={editingMessage?.chatId === activeChat?.id}
                 canSend={canSend}
                 disabled={isLoadingMessages}
                 error={error}
@@ -1114,6 +1173,10 @@ function ChatPage({ user, isLoggingOut, onLogout }: ChatPageProps) {
                 onFilesSelected={selectFiles}
                 onModelChange={setSelectedModel}
                 onRemoveAttachment={removePendingFile}
+                onRemoveExistingAttachment={(fileId) =>
+                  setRetainedAttachments((current) => current.filter((file) => file.id !== fileId))
+                }
+                onCancelEdit={cancelMessageEdit}
                 onScrollToBottom={handleScrollToBottom}
                 onStop={stopCurrentResponse}
                 onSubmit={submitMessage}

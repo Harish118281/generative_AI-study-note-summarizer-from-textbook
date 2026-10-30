@@ -1,4 +1,5 @@
 import json
+from datetime import datetime
 from threading import Lock, Thread
 
 from sqlalchemy.orm import Session
@@ -6,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.core.database import SessionLocal
 from app.models.chat import Chat
 from app.models.message import Message
+from app.models.file_library import ChatFile
 
 from app.schemas.chat import (
     SendMessageResponse,
@@ -284,11 +286,15 @@ def _stream_message_impl(
             )
 
         if save_user_message:
-            save_message(
+            saved_user_message = save_message(
                 db=db,
                 chat_id=chat_id,
                 role="user",
                 content=message,
+            )
+            yield format_stream_event(
+                event="user_message",
+                data={"id": saved_user_message.id},
             )
 
             temporary_title = set_temporary_title_safely(
@@ -688,6 +694,7 @@ def get_chat(
         "title": chat.title,
         "messages": [
             MessageItem(
+                id=message.id,
                 role=message.role,
                 content=message.content,
                 created_at=message.created_at,
@@ -761,3 +768,38 @@ def get_chat_model(
         )
         .first()
     )
+
+
+def edit_user_message(
+    db: Session,
+    chat_id: int,
+    message_id: int,
+    user_id: int,
+    content: str,
+) -> Message:
+    chat = get_chat_model(db=db, chat_id=chat_id, user_id=user_id)
+    message = (
+        db.query(Message)
+        .filter(Message.id == message_id, Message.chat_id == chat_id)
+        .first()
+    )
+    if chat is None or message is None or message.role != "user":
+        raise ValueError("User message not found.")
+
+    db.query(Message).filter(
+        Message.chat_id == chat_id,
+        Message.id > message_id,
+    ).delete(synchronize_session=False)
+    db.query(ChatFile).filter(
+        ChatFile.chat_id == chat_id,
+        ChatFile.created_at > message.created_at,
+    ).delete(synchronize_session=False)
+
+    message.content = content
+    chat.summary = None
+    chat.summarized_until_message_id = None
+    chat.summary_updated_at = None
+    chat.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(message)
+    return message

@@ -32,13 +32,17 @@ type StreamMessageOptions = {
   onTitle?: (title: string) => void
   onWebSearch?: (status: 'started' | 'finished', message?: string) => void
   onAnswerDone?: (answer: string) => void
+  onUserMessageId?: (id: number) => void
   signal?: AbortSignal
   files?: File[]
   resume?: boolean
   webSearchEnabled?: boolean
+  editMessageId?: number
+  keepFileIds?: number[]
 }
 
 type StreamPayload = {
+  id?: number
   text?: string
   answer?: string
   title?: string | null
@@ -399,7 +403,18 @@ export async function streamMessage(
         }),
         signal: options.signal,
       })
-    : await createStreamResponse(
+    : options.editMessageId
+      ? await createEditedStreamResponse(
+          chatId,
+          options.editMessageId,
+          message,
+          model,
+          options.files ?? [],
+          options.keepFileIds ?? [],
+          options.signal,
+          options.webSearchEnabled ?? true,
+        )
+      : await createStreamResponse(
         chatId,
         message,
         model,
@@ -455,6 +470,10 @@ export async function streamMessage(
         }
       }
 
+      if (eventName === 'user_message' && typeof data.id === 'number') {
+        options.onUserMessageId?.(data.id)
+      }
+
       if (eventName === 'web_search') {
         if (data.status === 'started' || data.status === 'finished') {
           options.onWebSearch?.(
@@ -502,6 +521,33 @@ export async function streamMessage(
     answer,
     title,
   }
+}
+
+async function createEditedStreamResponse(
+  chatId: number,
+  messageId: number,
+  message: string,
+  model: ChatModel,
+  files: File[],
+  keepFileIds: number[],
+  signal: AbortSignal | undefined,
+  webSearchEnabled: boolean,
+) {
+  const formData = new FormData()
+  formData.append('chat_id', String(chatId))
+  formData.append('message_id', String(messageId))
+  formData.append('message', message)
+  formData.append('model', model)
+  formData.append('web_search_enabled', String(webSearchEnabled))
+  formData.append('keep_file_ids', JSON.stringify(keepFileIds))
+  for (const file of files) formData.append('files', file)
+
+  return fetch(`${API_URL}/chat/message/stream/edit`, {
+    method: 'POST',
+    credentials: requestCredentials,
+    body: formData,
+    signal,
+  })
 }
 
 async function createStreamResponse(

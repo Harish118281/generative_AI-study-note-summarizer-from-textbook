@@ -1,3 +1,5 @@
+import json
+
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from sqlalchemy.orm import Session
@@ -26,10 +28,12 @@ from app.services.file_rag_service import (
     list_library_files,
     list_chat_files,
     save_upload_to_library,
+    attach_files_to_chat,
 )
 from app.services.chat_service import (
     create_chat,
     delete_chat,
+    edit_user_message,
     get_all_chats,
     get_chat,
     get_chat_model,
@@ -199,6 +203,64 @@ def message_stream_with_files(
             user_id=current_user.id,
             model=model,
             attached_file_ids=attached_file_ids,
+            web_search_enabled=web_search_enabled,
+        ),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@router.post("/message/stream/edit")
+def edit_message_stream(
+    chat_id: int = Form(...),
+    message_id: int = Form(...),
+    message: str = Form(...),
+    model: str | None = Form(None),
+    web_search_enabled: bool = Form(True),
+    keep_file_ids: str = Form("[]"),
+    files: list[UploadFile] = File(default=[]),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        retained_ids = [int(file_id) for file_id in json.loads(keep_file_ids)]
+        new_file_ids: list[int] = []
+        for upload in files:
+            library_file, _created = save_upload_to_library(
+                db=db,
+                upload=upload,
+                user_id=current_user.id,
+            )
+            new_file_ids.append(library_file.id)
+
+        edited_message = edit_user_message(
+            db=db,
+            chat_id=chat_id,
+            message_id=message_id,
+            user_id=current_user.id,
+            content=message,
+        )
+
+        attach_files_to_chat(
+            db=db,
+            chat_id=chat_id,
+            user_id=current_user.id,
+            file_ids=[*retained_ids, *new_file_ids],
+        )
+    except (ValueError, TypeError, json.JSONDecodeError) as error:
+        raise HTTPException(status_code=400, detail=str(error))
+
+    return StreamingResponse(
+        stream_message(
+            db=db,
+            chat_id=chat_id,
+            message=edited_message.content,
+            user_id=current_user.id,
+            model=model,
+            resume_existing_message=True,
             web_search_enabled=web_search_enabled,
         ),
         media_type="text/event-stream",
