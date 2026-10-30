@@ -502,6 +502,15 @@ function ChatPage({ user, isLoggingOut, onLogout }: ChatPageProps) {
     })
   }
 
+  function moveSessionToTop(chatId: number) {
+    setSessions((currentSessions) => {
+      const index = currentSessions.findIndex((session) => session.id === chatId)
+      if (index <= 0) return currentSessions
+      const session = currentSessions[index]
+      return [session, ...currentSessions.slice(0, index), ...currentSessions.slice(index + 1)]
+    })
+  }
+
   function updateSessionTitle(chatId: number, title?: string | null) {
     const cleanedTitle = title?.trim()
 
@@ -720,6 +729,7 @@ function ChatPage({ user, isLoggingOut, onLogout }: ChatPageProps) {
 
       const resolvedSession = session
       sessionForMessage = resolvedSession
+      moveSessionToTop(resolvedSession.id)
 
       assistantMessageId = createMessageId()
       const pendingMessages: ChatMessage[] = [
@@ -1042,7 +1052,13 @@ function ChatPage({ user, isLoggingOut, onLogout }: ChatPageProps) {
       setChatFiles(attachedFiles)
       setSelectedPdfId(attachedFiles[0]?.id ?? null)
       activateChat(loadedSession)
-      saveSession(loadedSession)
+      setSessions((currentSessions) => {
+        const hasSession = currentSessions.some((item) => item.id === loadedSession.id)
+        if (!hasSession) return [...currentSessions, loadedSession]
+        return currentSessions.map((item) =>
+          item.id === loadedSession.id ? loadedSession : item,
+        )
+      })
       storeChatMessages(loadedSession.id, loadedMessages)
       const lastSavedMessage = savedChat.messages[savedChat.messages.length - 1]
       if (lastSavedMessage?.role === 'user') {

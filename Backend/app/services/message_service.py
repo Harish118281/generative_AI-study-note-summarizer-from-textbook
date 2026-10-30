@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from sqlalchemy.orm import Session
 
 from app.models.chat import Chat
@@ -13,6 +15,10 @@ def save_message(
     role: str,
     content: str,
 ) -> Message:
+
+    chat = db.get(Chat, chat_id)
+    if chat is not None:
+        chat.updated_at = datetime.utcnow()
 
     message = Message(
         chat_id=chat_id,

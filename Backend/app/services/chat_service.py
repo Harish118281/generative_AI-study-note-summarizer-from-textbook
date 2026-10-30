@@ -661,7 +661,7 @@ def get_all_chats(
     return (
         db.query(Chat)
         .filter(Chat.user_id == user_id)
-        .order_by(Chat.updated_at.desc())
+        .order_by(Chat.updated_at.desc(), Chat.id.desc())
         .all()
     )
 

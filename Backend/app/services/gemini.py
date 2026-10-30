@@ -205,6 +205,16 @@ def _extract_custom_instructions(conversation: list) -> list[str]:
     return instructions
 
 
+def _to_gemini_contents(conversation: list) -> list:
+    """Remove app-only metadata before passing content objects to the Gemini SDK."""
+    return [
+        {key: value for key, value in item.items() if key != "system_instruction"}
+        if isinstance(item, dict)
+        else item
+        for item in conversation
+    ]
+
+
 def _find_web_search_call(response):
     if not response.candidates:
         return None, None
@@ -236,7 +246,7 @@ def _generate_initial_chat_response(
         log_gemini_call("chat search decision generate_content", model_name)
         response = client.models.generate_content(
             model=model_name,
-            contents=conversation,
+            contents=_to_gemini_contents(conversation),
             config=_get_chat_config(
                 enable_web_search=not skip_web_search,
                 conversation=conversation,
@@ -285,7 +295,7 @@ def _generate_initial_chat_response(
         log_gemini_call("chat response after Tavily search", model_name)
         response = client.models.generate_content(
             model=model_name,
-            contents=follow_up_contents,
+            contents=_to_gemini_contents(follow_up_contents),
             config=_get_chat_config(answer_from_search=True, conversation=follow_up_contents),
         )
     except errors.APIError as error:
@@ -296,7 +306,7 @@ def _generate_initial_chat_response(
             log_gemini_call("chat search-context fallback generate_content", model_name)
             response = client.models.generate_content(
                 model=model_name,
-                contents=_build_search_fallback_contents(conversation, web_context),
+                contents=_to_gemini_contents(_build_search_fallback_contents(conversation, web_context)),
                 config=_get_chat_config(answer_from_search=True, conversation=conversation),
             )
         except errors.APIError as error:
@@ -351,7 +361,7 @@ def generate_chat_response(
             log_gemini_call("chat continuation generate_content", model_name)
             response = client.models.generate_content(
                 model=model_name,
-                contents=temporary_context,
+                contents=_to_gemini_contents(temporary_context),
                 config=_get_chat_config(conversation=temporary_context),
             )
         except errors.APIError as error:
@@ -388,7 +398,7 @@ def generate_chat_response_events_stream(
         log_gemini_call("chat initial response stream", model_name)
         response_stream = client.models.generate_content_stream(
             model=model_name,
-            contents=conversation,
+            contents=_to_gemini_contents(conversation),
             config=_get_chat_config(
                 enable_web_search=not skip_web_search,
                 conversation=conversation,
@@ -480,7 +490,7 @@ def generate_chat_response_events_stream(
                 log_gemini_call("chat response after Tavily search stream", model_name)
                 response_stream = client.models.generate_content_stream(
                     model=model_name,
-                    contents=continuation_context,
+                    contents=_to_gemini_contents(continuation_context),
                     config=_get_chat_config(answer_from_search=True, conversation=continuation_context),
                 )
             except errors.APIError as error:
@@ -506,9 +516,8 @@ def generate_chat_response_events_stream(
             log_gemini_call("chat search-context fallback stream", model_name)
             fallback_stream = client.models.generate_content_stream(
                 model=model_name,
-                contents=_build_search_fallback_contents(
-                    conversation,
-                    search_context_for_fallback,
+                contents=_to_gemini_contents(
+                    _build_search_fallback_contents(conversation, search_context_for_fallback)
                 ),
                 config=_get_chat_config(answer_from_search=True, conversation=conversation),
             )
@@ -560,7 +569,7 @@ def generate_chat_response_events_stream(
             log_gemini_call("chat continuation generate_content_stream", model_name)
             response_stream = client.models.generate_content_stream(
                 model=model_name,
-                contents=temporary_context,
+                contents=_to_gemini_contents(temporary_context),
                 config=_get_chat_config(conversation=temporary_context),
             )
         except errors.APIError as error:
@@ -617,7 +626,7 @@ def generate_summary_response(
         log_gemini_call("summary generate_content", model_name)
         response = client.models.generate_content(
             model=model_name,
-            contents=conversation,
+            contents=_to_gemini_contents(conversation),
             config=types.GenerateContentConfig(
                 maxOutputTokens=SUMMARY_OUTPUT_TOKEN_LIMIT,
             ),
