@@ -3,4 +3,5 @@ export type CurrentUser = {
   email: string
   name: string
   created_at: string
+  custom_instructions?: string | null
 }

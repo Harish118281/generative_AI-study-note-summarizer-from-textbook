@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { CurrentUser } from '../../types/auth'
 import type { ChatModel } from '../../types/chat'
 import { chatModelOptions } from '../../types/chat'
@@ -11,6 +12,7 @@ type SettingsPageProps = {
   accentColor: AccentColor
   defaultModel: ChatModel
   user: CurrentUser
+  customInstructions: string
   webSearchEnabled: boolean
   onAppearanceChange: (value: AppearanceMode) => void
   onAccentColorChange: (value: AccentColor) => void
@@ -18,6 +20,7 @@ type SettingsPageProps = {
   onDefaultModelChange: (value: ChatModel) => void
   onLogout: () => void
   onWebSearchChange: (value: boolean) => void
+  onCustomInstructionsSave: (value: string) => Promise<void>
 }
 
 function SettingsPage({
@@ -25,6 +28,7 @@ function SettingsPage({
   accentColor,
   defaultModel,
   user,
+  customInstructions,
   webSearchEnabled,
   onAppearanceChange,
   onAccentColorChange,
@@ -32,7 +36,25 @@ function SettingsPage({
   onDefaultModelChange,
   onLogout,
   onWebSearchChange,
+  onCustomInstructionsSave,
 }: SettingsPageProps) {
+  const [instructionDraft, setInstructionDraft] = useState(customInstructions)
+  const [isSavingInstructions, setIsSavingInstructions] = useState(false)
+  const [instructionsStatus, setInstructionsStatus] = useState('')
+
+  async function saveInstructions() {
+    setIsSavingInstructions(true)
+    setInstructionsStatus('')
+    try {
+      await onCustomInstructionsSave(instructionDraft)
+      setInstructionsStatus('Saved')
+    } catch (error) {
+      setInstructionsStatus(error instanceof Error ? error.message : 'Could not save instructions.')
+    } finally {
+      setIsSavingInstructions(false)
+    }
+  }
+
   return (
     <div className="settings-backdrop" onMouseDown={(event) => {
       if (event.target === event.currentTarget) onClose()
@@ -82,6 +104,35 @@ function SettingsPage({
               <span aria-hidden="true" />
               <span className="settings-switch-label">{webSearchEnabled ? 'On' : 'Off'}</span>
             </label>
+          </section>
+
+          <section className="settings-group settings-instructions" aria-labelledby="settings-instructions-title">
+            <div>
+              <h2 id="settings-instructions-title">Custom instructions</h2>
+              <p>Set response preferences that should apply to your chats.</p>
+            </div>
+            <textarea
+              aria-label="Custom instructions for the assistant"
+              maxLength={4000}
+              onChange={(event) => {
+                setInstructionDraft(event.target.value)
+                setInstructionsStatus('')
+              }}
+              placeholder="For example: explain concepts step by step and define technical terms."
+              rows={5}
+              value={instructionDraft}
+            />
+            <div className="settings-instructions-footer">
+              <span aria-live="polite">{instructionsStatus || `${instructionDraft.length}/4000`}</span>
+              <button
+                className="settings-logout"
+                disabled={isSavingInstructions || instructionDraft === customInstructions}
+                onClick={() => void saveInstructions()}
+                type="button"
+              >
+                {isSavingInstructions ? 'Saving...' : 'Save instructions'}
+              </button>
+            </div>
           </section>
 
           <section className="settings-group settings-appearance" aria-labelledby="settings-appearance-title">

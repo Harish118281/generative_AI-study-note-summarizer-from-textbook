@@ -16,6 +16,7 @@ import {
 } from '../../services/chatservice'
 import LibraryPage from '../LibraryPage/LibraryPage'
 import SettingsPage, { type AppearanceMode } from '../SettingsPage/SettingsPage'
+import { saveCustomInstructions } from '../../services/authservice'
 import { accentColorOptions, isAccentColor, type AccentColor } from '../../theme/accentColors'
 import { chatModelOptions } from '../../types/chat'
 import type {
@@ -110,6 +111,7 @@ function ChatPage({ user, isLoggingOut, onLogout }: ChatPageProps) {
     readStoredBoolean(WEB_SEARCH_STORAGE_PREFIX, user.id, true),
   )
   const [appearance, setAppearance] = useState<AppearanceMode>(() => readStoredAppearance(user.id))
+  const [customInstructions, setCustomInstructions] = useState(user.custom_instructions ?? '')
   const [accentColor, setAccentColor] = useState<AccentColor>(() => readStoredAccentColor(user.id))
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [sendingChatKeys, setSendingChatKeys] = useState<string[]>([])
@@ -540,6 +542,11 @@ function ChatPage({ user, isLoggingOut, onLogout }: ChatPageProps) {
         // Keep polling; the title worker can finish even if history briefly fails.
       }
     }
+  }
+
+  async function updateCustomInstructions(value: string) {
+    const savedUser = await saveCustomInstructions(value)
+    setCustomInstructions(savedUser.custom_instructions ?? '')
   }
 
   function getDraftKey(chat: ChatSession | null = activeChat) {
@@ -1244,6 +1251,7 @@ function ChatPage({ user, isLoggingOut, onLogout }: ChatPageProps) {
             accentColor={accentColor}
             defaultModel={selectedModel}
             user={user}
+            customInstructions={customInstructions}
             webSearchEnabled={webSearchEnabled}
             onAppearanceChange={setAppearance}
             onAccentColorChange={setAccentColor}
@@ -1251,6 +1259,7 @@ function ChatPage({ user, isLoggingOut, onLogout }: ChatPageProps) {
             onDefaultModelChange={setSelectedModel}
             onLogout={onLogout}
             onWebSearchChange={setWebSearchEnabled}
+            onCustomInstructionsSave={updateCustomInstructions}
           />
         )}
       </section>

@@ -42,6 +42,7 @@ def build_prompt(
     messages: list[Message],
     summary: str | None = None,
     instruction_prompts: list[str] | None = None,
+    custom_instructions: str | None = None,
     user_memory: str | None = None,
     book_chunks: list[str] | None = None,
     attached_file_parts: list[dict] | None = None,
@@ -70,6 +71,7 @@ def build_prompt(
             prompt.append(
                 {
                     "role": "user",
+                    "system_instruction": True,
                     "parts": [
                         {
                             "text":
@@ -79,6 +81,24 @@ def build_prompt(
                     ],
                 }
             )
+
+    if custom_instructions and custom_instructions.strip():
+        prompt.append(
+            {
+                "role": "user",
+                "system_instruction": True,
+                "parts": [
+                    {
+                        "text": (
+                            "Assistant Instructions\n\n"
+                            "Follow these user preferences when answering, unless they conflict "
+                            "with safety or higher-priority instructions:\n"
+                            f"{custom_instructions.strip()}"
+                        )
+                    }
+                ],
+            }
+        )
 
     if user_memory:
         prompt.append(
@@ -194,6 +214,7 @@ def build_compact_prompt_that_fits(
     chat_id: int,
     summary: str | None,
     instruction_prompts: list[str],
+    custom_instructions: str | None = None,
     model_name: str = DEFAULT_MODEL_NAME,
     book_chunks: list[str] | None = None,
     attached_file_parts: list[dict] | None = None,
@@ -216,6 +237,7 @@ def build_compact_prompt_that_fits(
             messages=recent_messages,
             summary=summary,
             instruction_prompts=instruction_prompts,
+            custom_instructions=custom_instructions,
             book_chunks=book_chunks,
             attached_file_parts=attached_file_parts,
             web_search=web_search,
@@ -273,10 +295,12 @@ def prepare_prompt(
     )
 
     instruction_prompts = select_prompts()
+    custom_instructions = chat.user.custom_instructions if chat.user else None
 
     full_prompt = build_prompt(
         messages=all_messages,
         instruction_prompts=instruction_prompts,
+        custom_instructions=custom_instructions,
         book_chunks=book_chunks,
         attached_file_parts=attached_file_parts,
         web_search=web_search,
@@ -301,6 +325,7 @@ def prepare_prompt(
         chat_id=chat_id,
         summary=summary,
         instruction_prompts=instruction_prompts,
+        custom_instructions=custom_instructions,
         model_name=model_name,
         book_chunks=book_chunks,
         attached_file_parts=attached_file_parts,

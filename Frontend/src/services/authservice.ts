@@ -88,6 +88,21 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
   return normalizeUser('user' in data ? data.user : data)
 }
 
+export async function saveCustomInstructions(value: string): Promise<CurrentUser> {
+  const response = await fetch(`${API_URL}/auth/me/instructions`, {
+    method: 'PATCH',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ custom_instructions: value }),
+  })
+
+  if (!response.ok) {
+    throw new Error(await readApiError(response))
+  }
+
+  return normalizeUser(await response.json())
+}
+
 export async function logout(): Promise<void> {
   const response = await fetch(`${API_URL}/auth/logout`, {
     method: 'POST',

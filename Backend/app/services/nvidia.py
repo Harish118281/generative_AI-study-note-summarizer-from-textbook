@@ -402,6 +402,7 @@ def _get_client() -> OpenAI:
 
 def _to_openai_messages(conversation: list[dict]) -> list[dict]:
     messages: list[dict] = []
+    system_instructions: list[str] = []
 
     for item in conversation:
         text = _extract_text(item)
@@ -411,8 +412,9 @@ def _to_openai_messages(conversation: list[dict]) -> list[dict]:
 
         role = "assistant" if item.get("role") == "model" else "user"
 
-        if text.startswith("Assistant Instructions"):
-            role = "system"
+        if item.get("system_instruction") is True:
+            system_instructions.append(text)
+            continue
 
         if messages and messages[-1]["role"] == role:
             messages[-1]["content"] += f"\n\n{text}"
@@ -427,6 +429,9 @@ def _to_openai_messages(conversation: list[dict]) -> list[dict]:
 
     if not messages:
         raise NvidiaApiError("The NVIDIA request has no text content.")
+
+    if system_instructions:
+        messages.insert(0, {"role": "system", "content": "\n\n".join(system_instructions)})
 
     return messages
 
@@ -750,15 +755,13 @@ def _build_tool_result_messages(
 def _with_web_search_decision_prompt(messages: list[dict]) -> list[dict]:
     today = datetime.now().strftime("%B %d, %Y")
 
-    return [
-        {
-            "role": "system",
-            "content": (
-                f"Current date: {today}\n\n"
-                f"{WEB_SEARCH_DECISION_PROMPT.strip()}\n\n"
-                "When web results are provided, cite factual claims with Markdown "
-                "links to their source URLs. If sources are insufficient, say so."
-            ),
-        },
-        *messages,
-    ]
+    instruction = (
+        f"Current date: {today}\n\n"
+        f"{WEB_SEARCH_DECISION_PROMPT.strip()}\n\n"
+        "When web results are provided, cite factual claims with Markdown "
+        "links to their source URLs. If sources are insufficient, say so."
+    )
+    if messages and messages[0]["role"] == "system":
+        instruction = f"{messages[0]['content']}\n\n{instruction}"
+        messages = messages[1:]
+    return [{"role": "system", "content": instruction}, *messages]

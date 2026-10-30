@@ -216,6 +216,9 @@ def _with_search_instruction(messages: list[dict]) -> list[dict]:
         "on results and cite source URLs as Markdown links. "
         f"Current date: {today}."
     )
+    if messages and messages[0]["role"] == "system":
+        instruction = f"{messages[0]['content']}\n\n{instruction}"
+        messages = messages[1:]
     return [{"role": "system", "content": instruction}, *messages]
 
 
@@ -263,6 +266,7 @@ def _create_completion(client: OpenAI, **kwargs):
 
 def _to_openai_messages(conversation: list[dict]) -> list[dict[str, str]]:
     messages: list[dict[str, str]] = []
+    system_instructions: list[str] = []
     for item in conversation:
         text = "\n".join(
             part["text"].strip()
@@ -274,14 +278,17 @@ def _to_openai_messages(conversation: list[dict]) -> list[dict[str, str]]:
         if not text:
             continue
         role = "assistant" if item.get("role") == "model" else "user"
-        if text.startswith("Assistant Instructions"):
-            role = "system"
+        if item.get("system_instruction") is True:
+            system_instructions.append(text)
+            continue
         if messages and messages[-1]["role"] == role:
             messages[-1]["content"] += f"\n\n{text}"
         else:
             messages.append({"role": role, "content": text})
     if not messages:
         raise CloudflareApiError("The Qwen request has no text content.")
+    if system_instructions:
+        messages.insert(0, {"role": "system", "content": "\n\n".join(system_instructions)})
     return messages
 
 

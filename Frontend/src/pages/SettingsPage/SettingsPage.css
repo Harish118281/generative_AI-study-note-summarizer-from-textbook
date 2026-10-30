@@ -47,6 +47,12 @@
 .settings-group p { margin: 5px 0 0; color: #69766f; font-size: 13px; line-height: 1.45; }
 .settings-group select { width: 205px; min-height: 40px; padding: 0 12px; border: 1px solid #cfd8d3; border-radius: 8px; color: inherit; background: #fff; font: inherit; }
 
+.settings-instructions { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+.settings-instructions textarea { width: 100%; min-height: 116px; padding: 11px 12px; resize: vertical; border: 1px solid #cfd8d3; border-radius: 8px; color: inherit; background: #fff; font: inherit; line-height: 1.5; }
+.settings-instructions textarea:focus-visible { border-color: var(--color-accent); outline: 2px solid color-mix(in srgb, var(--color-accent) 22%, transparent); }
+.settings-instructions-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: #69766f; font-size: 12px; }
+.settings-instructions-footer button:disabled { cursor: default; opacity: .55; }
+
 .settings-switch { display: inline-flex; align-items: center; gap: 9px; cursor: pointer; }
 .settings-switch input { position: absolute; width: 1px; height: 1px; opacity: 0; }
 .settings-switch > span:first-of-type { position: relative; width: 42px; height: 24px; border-radius: 99px; background: #b9c3bd; transition: background 150ms ease; }
@@ -99,7 +105,9 @@ html[data-theme='dark'] .settings-dialog { color: #edf2ef; background: #202923; 
 html[data-theme='dark'] .settings-header,
 html[data-theme='dark'] .settings-group { border-color: #3b4840; }
 html[data-theme='dark'] .settings-group select,
+html[data-theme='dark'] .settings-instructions textarea,
 html[data-theme='dark'] .settings-logout,
 html[data-theme='dark'] .settings-segmented button.selected { color: #edf2ef; background: #2a352e; border-color: #455249; }
 html[data-theme='dark'] .settings-segmented { background: #171e1a; border-color: #455249; }
 html[data-theme='dark'] .settings-account-name { color: #edf2ef; }
+html[data-theme='dark'] .settings-instructions textarea { color: #edf2ef; }

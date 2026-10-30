@@ -174,16 +174,35 @@ def _stopped_by_output_limit(response) -> bool:
 def _get_chat_config(
     enable_web_search: bool = False,
     answer_from_search: bool = False,
+    conversation: list | None = None,
 ) -> types.GenerateContentConfig:
+    system_instructions = _extract_custom_instructions(conversation or [])
+    if enable_web_search:
+        system_instructions.append(WEB_SEARCH_DECISION_PROMPT)
+    elif answer_from_search:
+        system_instructions.append(WEB_SEARCH_ANSWER_PROMPT)
+
     return types.GenerateContentConfig(
         maxOutputTokens=CHAT_OUTPUT_TOKEN_LIMIT,
         tools=[WEB_SEARCH_TOOL] if enable_web_search else None,
-        systemInstruction=(
-            WEB_SEARCH_DECISION_PROMPT
-            if enable_web_search
-            else WEB_SEARCH_ANSWER_PROMPT if answer_from_search else None
-        ),
+        systemInstruction="\n\n".join(system_instructions) or None,
     )
+
+
+def _extract_custom_instructions(conversation: list) -> list[str]:
+    instructions: list[str] = []
+    for item in conversation:
+        if not isinstance(item, dict) or item.get("system_instruction") is not True:
+            continue
+        if isinstance(item, dict):
+            parts = item.get("parts", [])
+        else:
+            parts = getattr(item, "parts", []) or []
+        for part in parts:
+            text = part.get("text") if isinstance(part, dict) else getattr(part, "text", None)
+            if isinstance(text, str):
+                instructions.append(text.strip())
+    return instructions
 
 
 def _find_web_search_call(response):
@@ -218,7 +237,10 @@ def _generate_initial_chat_response(
         response = client.models.generate_content(
             model=model_name,
             contents=conversation,
-            config=_get_chat_config(enable_web_search=not skip_web_search),
+            config=_get_chat_config(
+                enable_web_search=not skip_web_search,
+                conversation=conversation,
+            ),
         )
     except errors.APIError as error:
         _raise_clean_gemini_error(error)
@@ -264,7 +286,7 @@ def _generate_initial_chat_response(
         response = client.models.generate_content(
             model=model_name,
             contents=follow_up_contents,
-            config=_get_chat_config(answer_from_search=True),
+            config=_get_chat_config(answer_from_search=True, conversation=follow_up_contents),
         )
     except errors.APIError as error:
         _raise_clean_gemini_error(error)
@@ -275,7 +297,7 @@ def _generate_initial_chat_response(
             response = client.models.generate_content(
                 model=model_name,
                 contents=_build_search_fallback_contents(conversation, web_context),
-                config=_get_chat_config(answer_from_search=True),
+                config=_get_chat_config(answer_from_search=True, conversation=conversation),
             )
         except errors.APIError as error:
             _raise_clean_gemini_error(error)
@@ -330,7 +352,7 @@ def generate_chat_response(
             response = client.models.generate_content(
                 model=model_name,
                 contents=temporary_context,
-                config=_get_chat_config(),
+                config=_get_chat_config(conversation=temporary_context),
             )
         except errors.APIError as error:
             _raise_clean_gemini_error(error)
@@ -367,7 +389,10 @@ def generate_chat_response_events_stream(
         response_stream = client.models.generate_content_stream(
             model=model_name,
             contents=conversation,
-            config=_get_chat_config(enable_web_search=not skip_web_search),
+            config=_get_chat_config(
+                enable_web_search=not skip_web_search,
+                conversation=conversation,
+            ),
         )
     except errors.APIError as error:
         _raise_clean_gemini_error(error)
@@ -456,7 +481,7 @@ def generate_chat_response_events_stream(
                 response_stream = client.models.generate_content_stream(
                     model=model_name,
                     contents=continuation_context,
-                    config=_get_chat_config(answer_from_search=True),
+                    config=_get_chat_config(answer_from_search=True, conversation=continuation_context),
                 )
             except errors.APIError as error:
                 _raise_clean_gemini_error(error)
@@ -485,7 +510,7 @@ def generate_chat_response_events_stream(
                     conversation,
                     search_context_for_fallback,
                 ),
-                config=_get_chat_config(answer_from_search=True),
+                config=_get_chat_config(answer_from_search=True, conversation=conversation),
             )
         except errors.APIError as error:
             _raise_clean_gemini_error(error)
@@ -536,7 +561,7 @@ def generate_chat_response_events_stream(
             response_stream = client.models.generate_content_stream(
                 model=model_name,
                 contents=temporary_context,
-                config=_get_chat_config(),
+                config=_get_chat_config(conversation=temporary_context),
             )
         except errors.APIError as error:
             _raise_clean_gemini_error(error)

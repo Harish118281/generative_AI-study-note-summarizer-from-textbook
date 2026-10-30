@@ -19,5 +19,10 @@ class CurrentUserResponse(BaseModel):
     name: str
     email: EmailStr
     created_at: datetime
+    custom_instructions: str | None = None
 
     model_config = {"from_attributes": True}
+
+
+class CustomInstructionsRequest(BaseModel):
+    custom_instructions: str = Field(max_length=4000)

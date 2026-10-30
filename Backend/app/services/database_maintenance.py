@@ -17,6 +17,9 @@ def ensure_database_shape() -> None:
         if inspector.has_table("chats"):
             _add_missing_columns(connection, "chats", {"user_id": "INTEGER"})
 
+        if inspector.has_table("users"):
+            _add_missing_columns(connection, "users", {"custom_instructions": "TEXT"})
+
         if engine.dialect.name == "postgresql" and inspector.has_table("file_chunks"):
             connection.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
             connection.execute(

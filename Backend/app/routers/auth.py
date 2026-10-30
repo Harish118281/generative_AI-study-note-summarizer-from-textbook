@@ -6,7 +6,12 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import SESSION_COOKIE, create_access_token, get_current_user
 from app.models.user import User
-from app.schemas.auth import CurrentUserResponse, LoginRequest, SignUpRequest
+from app.schemas.auth import (
+    CurrentUserResponse,
+    CustomInstructionsRequest,
+    LoginRequest,
+    SignUpRequest,
+)
 from app.services.auth_service import create_user, find_user_by_email, verify_password
 
 
@@ -71,4 +76,16 @@ def logout(response: Response):
 
 @router.get("/me", response_model=CurrentUserResponse)
 def me(current_user: User = Depends(get_current_user)):
+    return current_user
+
+
+@router.patch("/me/instructions", response_model=CurrentUserResponse)
+def update_custom_instructions(
+    payload: CustomInstructionsRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    current_user.custom_instructions = payload.custom_instructions.strip() or None
+    db.commit()
+    db.refresh(current_user)
     return current_user
