@@ -1191,7 +1191,7 @@ def _clean_filename(
     filename: str,
 ) -> str:
     cleaned = Path(filename).name.strip()
-    cleaned = re.sub(r"[^A-Za-z0-9._ -]", "_", cleaned)
+    cleaned = re.sub(r"[^A-Za-z0-9._ ()-]", "_", cleaned)
 
     return cleaned or "uploaded-file"
 

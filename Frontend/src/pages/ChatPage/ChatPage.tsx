@@ -50,6 +50,10 @@ const WEB_SEARCH_STORAGE_PREFIX = 'studyai-web-search:'
 const APPEARANCE_STORAGE_PREFIX = 'studyai-appearance:'
 const ACCENT_COLOR_STORAGE_PREFIX = 'studyai-accent-color:'
 
+function normalizeAttachmentName(filename: string) {
+  return filename.toLocaleLowerCase().replace(/[^a-z0-9]/g, '')
+}
+
 function readStoredModel(userId: number): ChatModel {
   try {
     const savedModel = localStorage.getItem(`${CHAT_MODEL_STORAGE_PREFIX}${userId}`)
@@ -143,9 +147,13 @@ function ChatPage({ user, isLoggingOut, onLogout }: ChatPageProps) {
 
   const activeChatSending = isActiveChatSending()
   const webSearchStatus = webSearchStatuses[getDraftKey()] ?? ''
+  const isEditingActiveChat =
+    editingMessage !== null &&
+    activeChat !== null &&
+    editingMessage.chatId === activeChat.id
 
   const canSend =
-    (input.trim().length > 0 || pendingFiles.length > 0 || retainedAttachments.length > 0) &&
+    (input.trim().length > 0 || pendingFiles.length > 0 || (isEditingActiveChat && retainedAttachments.length > 0)) &&
     !isActiveChatSending() &&
     !isLoadingMessages
   const isEmptyChat =
@@ -181,6 +189,10 @@ function ChatPage({ user, isLoggingOut, onLogout }: ChatPageProps) {
   }
 
   function activateChat(chat: ChatSession | null) {
+    if (activeChatRef.current?.id !== chat?.id) {
+      setEditingMessage(null)
+      setRetainedAttachments([])
+    }
     activeChatRef.current = chat
     setActiveChat(chat)
     try {
@@ -365,8 +377,11 @@ function ChatPage({ user, isLoggingOut, onLogout }: ChatPageProps) {
       if (activeChatRef.current?.id !== chatId) return
 
       setChatFiles(files)
+      const normalizedTargetName = normalizeAttachmentName(target?.filename ?? '')
       const matchesName = (file: ChatAttachment) =>
-        file.original_filename === target?.filename || file.filename === target?.filename
+        file.original_filename === target?.filename ||
+        file.filename === target?.filename ||
+        normalizeAttachmentName(file.original_filename || file.filename) === normalizedTargetName
       const targetFile = target
         ? files.find((file) => matchesName(file) && (file.size === target.size || file.size == null))
           ?? files.find(matchesName)
@@ -535,6 +550,7 @@ function ChatPage({ user, isLoggingOut, onLogout }: ChatPageProps) {
     draftInput: string = input,
     draftAttachments: PendingAttachment[] = pendingFiles,
   ) {
+    if (editingMessage?.chatId === activeChatRef.current?.id) return
     const key = getDraftKey()
     saveDraft(key, { input: draftInput, attachments: draftAttachments })
   }
@@ -598,7 +614,10 @@ function ChatPage({ user, isLoggingOut, onLogout }: ChatPageProps) {
     const content = input.trim()
     const chatAtSubmit = activeChatRef.current
     const submittingKey = getDraftKey(chatAtSubmit)
-    const isEditingCurrentChat = editingMessage?.chatId === chatAtSubmit?.id
+    const isEditingCurrentChat =
+      editingMessage !== null &&
+      chatAtSubmit !== null &&
+      editingMessage.chatId === chatAtSubmit.id
 
     if (
       (content.length === 0 && pendingFiles.length === 0 && !(isEditingCurrentChat && retainedAttachments.length > 0)) ||
@@ -624,7 +643,7 @@ function ChatPage({ user, isLoggingOut, onLogout }: ChatPageProps) {
       category: attachment.category,
       preview_url: attachment.preview_url,
     }))
-    const currentEdit = editingMessage?.chatId === chatAtSubmit?.id ? editingMessage : null
+    const currentEdit = isEditingCurrentChat ? editingMessage : null
     const messageAttachments = currentEdit
       ? [...retainedAttachments, ...attachmentsForMessage]
       : attachmentsForMessage
@@ -948,6 +967,8 @@ function ChatPage({ user, isLoggingOut, onLogout }: ChatPageProps) {
 
   function startNewChat() {
     saveActiveDraft()
+    setEditingMessage(null)
+    setRetainedAttachments([])
     chatLoadId.current += 1
     setActiveView('chat')
     setIsPdfReaderOpen(false)
@@ -1158,10 +1179,8 @@ function ChatPage({ user, isLoggingOut, onLogout }: ChatPageProps) {
               />
               <Composer
                 attachments={pendingFiles}
-                existingAttachments={
-                  editingMessage?.chatId === activeChat?.id ? retainedAttachments : []
-                }
-                isEditing={editingMessage?.chatId === activeChat?.id}
+                existingAttachments={isEditingActiveChat ? retainedAttachments : []}
+                isEditing={isEditingActiveChat}
                 canSend={canSend}
                 disabled={isLoadingMessages}
                 error={error}

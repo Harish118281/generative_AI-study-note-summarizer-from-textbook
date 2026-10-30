@@ -83,6 +83,7 @@
   width: min(760px, 100%);
   overflow: visible;
   padding: 0;
+  transform: translateY(-36px);
 }
 
 .empty-chat-workspace .messages-inner {
